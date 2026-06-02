@@ -64,7 +64,13 @@ func main() {
 	http.HandleFunc("GET /api/grades", handlers.GetGradesHandler)
 	http.HandleFunc("GET /api/grades/{student_id}", handlers.GetStudentGradesHandler)
 	http.HandleFunc("GET /api/teachers", handlers.ListTeachersHandler)
-	log.Println("Сервер запущен на http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	port := os.Getenv("PORT")
+	
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Сервер запущен на порту %s", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 
 }
