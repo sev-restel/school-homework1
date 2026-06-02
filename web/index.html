@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>School Homework — платформа домашних заданий</title>
+  <meta name="description" content="School Homework — платформа для учителей и учеников: задания, сдача работ, оценки и расписание.">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M16 7l9 4-9 4-9-4 9-4zM9 14.5V19c0 1.7 3.1 3 7 3s7-1.3 7-3v-4.5l-7 3.1-7-3.1z' fill='white'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+  <!-- ============================================================
+       ЭКРАН ВХОДА / РЕГИСТРАЦИИ (показывается, когда не авторизован)
+       ============================================================ -->
+  <div id="auth-screen" class="auth-screen">
+
+    <!-- Левая брендовая панель -->
+    <aside class="auth-brand">
+      <div class="auth-brand__inner">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="28" height="28">
+              <path d="M16 6l11 5-11 5L5 11l11-5z" fill="currentColor"/>
+              <path d="M8 14.5V20c0 2.2 3.6 3.8 8 3.8s8-1.6 8-3.8v-5.5l-8 3.6-8-3.6z" fill="currentColor" opacity=".75"/>
+              <path d="M27 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="brand__name">School&nbsp;Homework</span>
+        </div>
+
+        <h1 class="auth-brand__title">Учёба, в которой всё на своих местах.</h1>
+        <p class="auth-brand__subtitle">
+          Единое пространство для заданий, проверки работ, оценок и расписания.
+          Всё, что нужно учителю и ученику — в одном окне.
+        </p>
+      </div>
+      <div class="auth-brand__glow" aria-hidden="true"></div>
+    </aside>
+
+    <!-- Правая панель с формой -->
+    <main class="auth-panel">
+      <section class="auth-card">
+        <div class="tabs">
+          <button type="button" class="tab active" data-tab="login">Вход</button>
+          <button type="button" class="tab" data-tab="register">Регистрация</button>
+        </div>
+
+        <form id="login-form" class="tab-content active" autocomplete="on">
+          <label>Логин <input name="username" required placeholder="ivan_1234"></label>
+          <label>Пароль <input name="password" type="password" required placeholder="••••••••"></label>
+          <button type="submit" class="btn-primary btn-block">Войти</button>
+          <p class="auth-switch">Нет аккаунта? <button type="button" class="link" data-goto="register">Зарегистрироваться</button></p>
+        </form>
+
+        <form id="register-form" class="tab-content" autocomplete="on">
+          <label>ФИО <input name="full_name" required placeholder="Иванов Иван Иванович"></label>
+          <label>Пароль <input name="password" type="password" required minlength="6" placeholder="минимум 6 символов"></label>
+          <label>Invite-код <span class="hint">оставьте пустым — вы ученик</span>
+            <input name="invite_code" placeholder="код для учителя / админа">
+          </label>
+          <label>Предмет <span class="hint">только для учителя</span>
+            <input name="subject" placeholder="Математика">
+          </label>
+          <p class="hint">Ученики после регистрации подают заявку на вступление в класс.</p>
+          <button type="submit" class="btn-primary btn-block">Создать аккаунт</button>
+          <p class="auth-switch">Уже есть аккаунт? <button type="button" class="link" data-goto="login">Войти</button></p>
+        </form>
+      </section>
+      <p class="auth-footnote">© 2026 School Homework</p>
+    </main>
+  </div>
+
+  <!-- ============================================================
+       ОСНОВНОЕ ПРИЛОЖЕНИЕ (после авторизации)
+       ============================================================ -->
+  <div id="app-shell" class="app-shell" hidden>
+    <header class="topbar">
+      <div class="brand brand--sm">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22">
+            <path d="M16 6l11 5-11 5L5 11l11-5z" fill="currentColor"/>
+            <path d="M8 14.5V20c0 2.2 3.6 3.8 8 3.8s8-1.6 8-3.8v-5.5l-8 3.6-8-3.6z" fill="currentColor" opacity=".75"/>
+          </svg>
+        </span>
+        <span class="brand__name">School Homework</span>
+      </div>
+
+      <div id="user-info" class="user-info">
+        <div class="user-chip">
+          <span class="avatar" id="user-avatar">U</span>
+          <span class="user-meta">
+            <span id="user-name" class="user-meta__name"></span>
+            <span class="badge" id="user-role-badge"></span>
+          </span>
+        </div>
+        <button id="logout-btn" class="btn-ghost">Выйти</button>
+      </div>
+    </header>
+
+    <main class="container">
+
+      <!-- =========== STUDENT =========== -->
+      <section id="student-section" hidden>
+        <nav class="role-tabs">
+          <button class="role-tab active" data-panel="stu-homeworks">Задания</button>
+          <button class="role-tab" data-panel="stu-submit">Сдать работу</button>
+          <button class="role-tab" data-panel="stu-grades">Мои оценки</button>
+          <button class="role-tab" data-panel="stu-request">Записаться в класс</button>
+        </nav>
+
+        <div id="stu-homeworks" class="panel active">
+          <div class="card">
+            <div class="card__head">
+              <h2>Задания от учителей</h2>
+              <p class="card__sub">Скачайте материалы и сдайте выполненную работу.</p>
+            </div>
+            <ul id="stu-hw-list" class="item-list"></ul>
+          </div>
+        </div>
+
+        <div id="stu-submit" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Сдать работу</h2></div>
+            <form id="submit-form" enctype="multipart/form-data">
+              <label>Задание
+                <select id="submit-hw-select" name="homework_id" required>
+                  <option value="">— выберите задание —</option>
+                </select>
+              </label>
+              <label>Файл с выполненной работой <input name="file" type="file" required></label>
+              <button type="submit" class="btn-primary">Отправить работу</button>
+            </form>
+          </div>
+        </div>
+
+        <div id="stu-grades" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Мои оценки</h2></div>
+            <ul id="stu-grades-list" class="item-list"></ul>
+          </div>
+        </div>
+
+        <div id="stu-request" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Заявка на вступление в класс</h2></div>
+            <p id="stu-class-info" class="hint-block"></p>
+            <form id="request-form">
+              <label>Название класса <input name="class_name" placeholder="5А" required></label>
+              <button type="submit" class="btn-primary">Отправить заявку</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== TEACHER =========== -->
+      <section id="teacher-section" hidden>
+        <nav class="role-tabs">
+          <button class="role-tab active" data-panel="tea-upload">Задать ДЗ</button>
+          <button class="role-tab" data-panel="tea-homeworks">Мои задания</button>
+          <button class="role-tab" data-panel="tea-submissions">Работы учеников</button>
+          <button class="role-tab" data-panel="tea-requests">Заявки</button>
+        </nav>
+
+        <div id="tea-upload" class="panel active">
+          <div class="card">
+            <div class="card__head"><h2>Новое задание</h2></div>
+            <form id="upload-form" enctype="multipart/form-data">
+              <label>Файл <input name="file" type="file" required></label>
+              <div class="form-row">
+                <label>Предмет <input name="subject" placeholder="Математика"></label>
+                <label>Описание <input name="description" placeholder="§5 задачи 1–10"></label>
+              </div>
+              <button type="submit" class="btn-primary">Загрузить задание</button>
+            </form>
+          </div>
+        </div>
+
+        <div id="tea-homeworks" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Мои задания</h2></div>
+            <ul id="tea-hw-list" class="item-list"></ul>
+          </div>
+        </div>
+
+        <div id="tea-submissions" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Работы учеников</h2></div>
+            <div class="filter-row">
+              <label>Задание
+                <select id="subs-hw-select">
+                  <option value="">— выберите задание —</option>
+                </select>
+              </label>
+              <button id="subs-load-btn" class="btn-primary">Показать</button>
+            </div>
+            <ul id="subs-list" class="item-list"></ul>
+          </div>
+        </div>
+
+        <div id="tea-requests" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Заявки в класс</h2></div>
+            <ul id="tea-req-list" class="item-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== ADMIN =========== -->
+      <section id="admin-section" hidden>
+        <nav class="role-tabs">
+          <button class="role-tab active" data-panel="adm-schedule">Расписание</button>
+          <button class="role-tab" data-panel="adm-requests">Заявки</button>
+        </nav>
+
+        <div id="adm-schedule" class="panel active">
+          <div class="card">
+            <div class="card__head"><h2>Добавить запись в расписание</h2></div>
+            <form id="schedule-form">
+              <div class="form-row">
+                <label>Класс <input name="class_name" placeholder="5А" required></label>
+                <label>Неделя
+                  <select name="week_parity">
+                    <option value="odd">Нечётная</option>
+                    <option value="even">Чётная</option>
+                  </select>
+                </label>
+                <label>День (1–6) <input name="day_of_week" type="number" min="1" max="6" required></label>
+                <label>Урок (1–10) <input name="lesson_num" type="number" min="1" max="10" required></label>
+              </div>
+              <div class="form-row">
+                <label>Предмет <input name="subject" required></label>
+                <label>Учитель
+                  <select id="schedule-teacher-select" name="teacher_id">
+                    <option value="">— выберите учителя —</option>
+                  </select>
+                </label>
+                <label>Кабинет <input name="room" placeholder="201"></label>
+              </div>
+              <button type="submit" class="btn-primary">Добавить в расписание</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><h2>Просмотр расписания</h2></div>
+            <div class="filter-row">
+              <label>Класс <input id="sched-class-filter" placeholder="5А"></label>
+              <label>Неделя
+                <select id="sched-week-filter">
+                  <option value="odd">Нечётная</option>
+                  <option value="even">Чётная</option>
+                </select>
+              </label>
+              <button id="sched-load-btn" class="btn-primary">Показать</button>
+            </div>
+            <div class="table-wrap">
+              <table class="sched-table">
+                <thead>
+                  <tr><th>День</th><th>Урок</th><th>Предмет</th><th>Кабинет</th><th></th></tr>
+                </thead>
+                <tbody id="schedule-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="adm-requests" class="panel">
+          <div class="card">
+            <div class="card__head"><h2>Заявки в класс</h2></div>
+            <ul id="adm-req-list" class="item-list"></ul>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>
