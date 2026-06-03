@@ -19,6 +19,7 @@ type Homework struct {
 	ID          int     `json:"id"`
 	Filename    string  `json:"filename"`
 	Filepath    string  `json:"filepath"`
+	ClassName   *string `json:"class_name"` // класс, для которого выдано задание
 	Subject     *string `json:"subject"`
 	Description *string `json:"description"`
 	UploadedAt  string  `json:"uploaded_at"`
@@ -50,6 +51,12 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	//Установка ограничение на чтение
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	//Класс, для которого выдаётся задание — обязателен, иначе его увидят все классы.
+	className := normClass(r.FormValue("class"))
+	if className == "" {
+		http.Error(w, "Укажите класс, для которого задание", http.StatusBadRequest)
+		return
+	}
 	//Получаем мето данные файла и закидывем сам файл в память
 	file, h, err := r.FormFile("file")
 	if err != nil {
@@ -91,8 +98,8 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		descriptionVal = nil
 	}
 	displayName := filepath.Base(h.Filename)
-	_, err = database.DB.Exec(`INSERT INTO homework(filename, filepath, subject, description, teacher_id) VALUES($1, $2, $3, $4, $5)`,
-		displayName, uploadURLPath(diskName), subjectVal, descriptionVal, user.ID)
+	_, err = database.DB.Exec(`INSERT INTO homework(filename, filepath, class_name, subject, description, teacher_id) VALUES($1, $2, $3, $4, $5, $6)`,
+		displayName, uploadURLPath(diskName), className, subjectVal, descriptionVal, user.ID)
 	if err != nil {
 		http.Error(w, "Ошибка записи в базу данных", http.StatusInternalServerError)
 		return
@@ -141,6 +148,9 @@ func ListHomeworksHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode([]Homework{})
 			return
 		}
+		// Видит только задания СВОЕГО класса.
+		conds = append(conds, fmt.Sprintf("class_name = $%d", len(args)+1))
+		args = append(args, normClass(class.String))
 	}
 
 	if subject != "" {
@@ -148,7 +158,7 @@ func ListHomeworksHandler(w http.ResponseWriter, r *http.Request) {
 		args = append(args, subject)
 	}
 
-	query := `SELECT id, filename, filepath, subject, description FROM homework`
+	query := `SELECT id, filename, filepath, class_name, subject, description FROM homework`
 	if len(conds) > 0 {
 		query += " WHERE " + strings.Join(conds, " AND ")
 	}
@@ -164,7 +174,7 @@ func ListHomeworksHandler(w http.ResponseWriter, r *http.Request) {
 	homeworks := []Homework{}
 	for rows.Next() {
 		var hw Homework
-		if err := rows.Scan(&hw.ID, &hw.Filename, &hw.Filepath, &hw.Subject, &hw.Description); err != nil {
+		if err := rows.Scan(&hw.ID, &hw.Filename, &hw.Filepath, &hw.ClassName, &hw.Subject, &hw.Description); err != nil {
 			http.Error(w, "Некоректный тип данных", http.StatusBadRequest)
 			return
 		}

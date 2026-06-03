@@ -26,12 +26,19 @@ func Init() {
 	teacher_id INTEGER,
 	filename TEXT NOT NULL,
 	filepath TEXT NOT NULL,
+	class_name TEXT,
 	subject TEXT,
 	description TEXT,
     uploaded_at TIMESTAMPTZ DEFAULT NOW())`)
 
 	if err != nil {
 		log.Fatal("Невозможно создать BD: ", err)
+	}
+
+	// Миграция: для уже существующих БД добавляем колонку класса, если её нет.
+	_, err = db.Exec(`ALTER TABLE homework ADD COLUMN IF NOT EXISTS class_name TEXT`)
+	if err != nil {
+		log.Fatal("Невозможно добавить колонку class_name: ", err)
 	}
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users(

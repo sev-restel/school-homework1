@@ -3,6 +3,13 @@
 // =========================================================
 const DAYS = ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
+// Класс текущего ученика (для расписания и подписей). Заполняется в loadStudentData.
+let studentClass = "";
+// Текущее выбранное задание на вкладке "Работы учеников" (для авто-обновления).
+let subsCurrentHw = null;
+// Таймер авто-обновления данных (чтобы не жать F5).
+let pollTimer = null;
+
 // =========================================================
 // Токен / авторизация
 // =========================================================
@@ -70,6 +77,15 @@ const api = {
 
   // Teachers list (для формы расписания)
   listTeachers: () => request("/api/teachers"),
+
+  // Расписание самого учителя (его уроки во всех классах)
+  getMySchedule: (week) => request("/api/schedule?mine=1&week=" + week),
+
+  // Управление пользователями (admin)
+  listUsers:   ()             => request("/api/users"),
+  kickUser:    (id)           => request("/api/users/" + id + "/kick", { method: "PATCH" }),
+  setPassword: (id, password) => request("/api/users/" + id + "/password", { method: "PATCH", body: JSON.stringify({ password }), json: true }),
+  deleteUser:  (id)           => request("/api/users/" + id, { method: "DELETE" }),
 };
 
 // =========================================================
@@ -182,6 +198,7 @@ $("#register-form").addEventListener("submit", async e => {
 
 $("#logout-btn").addEventListener("click", async () => {
   try { await api.logout(); } catch (_) {}
+  stopPolling();
   clearAuth();
   showSection(null);
   toast("Вы вышли из системы");
@@ -192,9 +209,38 @@ $("#logout-btn").addEventListener("click", async () => {
 // =========================================================
 
 async function loadStudentData(prof) {
+  studentClass = prof.class || "";
   showStudentClass(prof);
-  // Грузим задания и оценки параллельно
-  await Promise.all([loadStuHomeworks(), loadStuGrades()]);
+  $("#stu-sched-class").textContent = studentClass
+    ? "Класс " + studentClass
+    : "Вы пока не записаны в класс";
+  // Грузим задания, оценки и расписание параллельно
+  await Promise.all([loadStuHomeworks(), loadStuGrades(), loadStuSchedule()]);
+}
+
+// Расписание ученика (по его классу)
+async function loadStuSchedule() {
+  const tbody = $("#stu-sched-tbody");
+  if (!studentClass) {
+    tbody.innerHTML = "<tr><td colspan='4' class='hint'>Вступите в класс, чтобы увидеть расписание.</td></tr>";
+    return;
+  }
+  const week = $("#stu-sched-week").value;
+  try {
+    const list = (await api.getSchedule(studentClass, week)) || [];
+    tbody.innerHTML = list.length === 0
+      ? "<tr><td colspan='4' class='hint'>На эту неделю записей нет.</td></tr>"
+      : "";
+    for (const s of list) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${h(DAYS[s.day_of_week] || s.day_of_week)}</td>
+        <td>${s.lesson_num}</td>
+        <td>${h(s.subject)}</td>
+        <td>${s.room ? h(s.room) : "—"}</td>`;
+      tbody.appendChild(tr);
+    }
+  } catch (err) { toast("Ошибка загрузки расписания: " + err.message, "error"); }
 }
 
 // Список заданий от учителей + заполнение селекта "Сдать работу"
@@ -217,6 +263,7 @@ async function loadStuHomeworks() {
       li.innerHTML = `
         <div class="item-title">${h(hw.filename)}</div>
         <div class="item-meta">${[
+          hw.class_name  ? "Класс: "    + h(hw.class_name)  : null,
           hw.subject     ? "Предмет: "  + h(hw.subject)     : null,
           hw.description ? "Описание: " + h(hw.description) : null,
         ].filter(Boolean).join(" · ") || "—"}</div>
@@ -279,6 +326,9 @@ $("#submit-form").addEventListener("submit", async e => {
   } catch (err) { toast(err.message, "error"); }
 });
 
+// Обновить расписание по выбранной неделе
+$("#stu-sched-load").addEventListener("click", loadStuSchedule);
+
 // Заявка в класс
 $("#request-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -295,8 +345,31 @@ $("#request-form").addEventListener("submit", async e => {
 // =========================================================
 
 async function loadTeacherData() {
-  await Promise.all([loadTeaHomeworks(), loadTeaRequests()]);
+  await Promise.all([loadTeaHomeworks(), loadTeaRequests(), loadTeaSchedule()]);
 }
+
+// Расписание самого учителя
+async function loadTeaSchedule() {
+  const tbody = $("#tea-sched-tbody");
+  const week = $("#tea-sched-week").value;
+  try {
+    const list = (await api.getMySchedule(week)) || [];
+    tbody.innerHTML = list.length === 0
+      ? "<tr><td colspan='5' class='hint'>На эту неделю уроков нет.</td></tr>"
+      : "";
+    for (const s of list) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${h(DAYS[s.day_of_week] || s.day_of_week)}</td>
+        <td>${s.lesson_num}</td>
+        <td>${h(s.class_name)}</td>
+        <td>${h(s.subject)}</td>
+        <td>${s.room ? h(s.room) : "—"}</td>`;
+      tbody.appendChild(tr);
+    }
+  } catch (err) { toast("Ошибка загрузки расписания: " + err.message, "error"); }
+}
+$("#tea-sched-load").addEventListener("click", loadTeaSchedule);
 
 // Загрузить форму + список заданий учителя
 $("#upload-form").addEventListener("submit", async e => {
@@ -328,6 +401,7 @@ async function loadTeaHomeworks() {
       li.innerHTML = `
         <div class="item-title">${h(hw.filename)}</div>
         <div class="item-meta">${[
+          hw.class_name  ? "Класс: "    + h(hw.class_name)  : null,
           hw.subject     ? "Предмет: "  + h(hw.subject)     : null,
           hw.description ? "Описание: " + h(hw.description) : null,
         ].filter(Boolean).join(" · ") || "—"}</div>
@@ -403,6 +477,7 @@ $("#subs-load-btn").addEventListener("click", async () => {
 });
 
 async function loadSubmissions(hwId) {
+  subsCurrentHw = hwId; // запоминаем для авто-обновления
   try {
     const list = (await api.getSubmissions(hwId)) || [];
     const ul   = $("#subs-list");
@@ -452,7 +527,64 @@ async function loadTeaRequests() {
 // =========================================================
 
 async function loadAdminData() {
-  await Promise.all([loadTeachers(), loadAdmRequests()]);
+  await Promise.all([loadTeachers(), loadAdmRequests(), loadUsers()]);
+}
+
+// Список пользователей + действия (кик из класса / удаление)
+const ROLE_RU = { student: "Ученик", teacher: "Учитель", admin: "Админ" };
+async function loadUsers() {
+  try {
+    const users = (await api.listUsers()) || [];
+    const ul = $("#adm-users-list");
+    ul.innerHTML = users.length === 0 ? '<li class="empty">Пользователей нет.</li>' : "";
+
+    for (const u of users) {
+      const meta = [
+        ROLE_RU[u.role] || u.role,
+        u.role === "student" && u.class ? "класс " + u.class : null,
+        u.role === "student" && !u.class ? "без класса" : null,
+        u.role === "teacher" && u.subject ? u.subject : null,
+        "@" + u.username,
+      ].filter(Boolean).join(" · ");
+
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div class="item-title">${h(u.full_name)}</div>
+        <div class="item-meta">${h(meta)}</div>
+        <div class="item-actions">
+          <button class="btn-small" data-act="pass">Сменить пароль</button>
+          ${u.role === "student" && u.class ? `<button class="btn-small" data-act="kick">Исключить из класса</button>` : ""}
+          ${u.role !== "admin" ? `<button class="btn-small btn-danger" data-act="del">Удалить аккаунт</button>` : `<span class="chip chip--neutral">админ</span>`}
+        </div>`;
+
+      const passBtn = li.querySelector('[data-act="pass"]');
+      if (passBtn) passBtn.addEventListener("click", async () => {
+        const np = prompt(`Новый пароль для «${u.full_name}» (@${u.username}), минимум 6 символов:`);
+        if (np === null) return;
+        if (np.trim().length < 6) { toast("Пароль минимум 6 символов", "error"); return; }
+        try {
+          await api.setPassword(u.id, np.trim());
+          toast(`Пароль обновлён. Передайте: @${u.username} / ${np.trim()}`);
+        } catch (err) { toast(err.message, "error"); }
+      });
+
+      const kickBtn = li.querySelector('[data-act="kick"]');
+      if (kickBtn) kickBtn.addEventListener("click", async () => {
+        if (!confirm(`Исключить ${u.full_name} из класса ${u.class}?`)) return;
+        try { await api.kickUser(u.id); toast("Ученик исключён из класса"); await loadUsers(); }
+        catch (err) { toast(err.message, "error"); }
+      });
+
+      const delBtn = li.querySelector('[data-act="del"]');
+      if (delBtn) delBtn.addEventListener("click", async () => {
+        if (!confirm(`Удалить аккаунт «${u.full_name}» безвозвратно? Все его данные тоже будут удалены.`)) return;
+        try { await api.deleteUser(u.id); toast("Аккаунт удалён"); await loadUsers(); }
+        catch (err) { toast(err.message, "error"); }
+      });
+
+      ul.appendChild(li);
+    }
+  } catch (err) { toast("Ошибка загрузки пользователей: " + err.message, "error"); }
 }
 
 // Заполняет выпадающий список учителей в форме расписания
@@ -574,8 +706,49 @@ setupRoleTabs("student-section");
 setupRoleTabs("teacher-section");
 setupRoleTabs("admin-section");
 
+// =========================================================
+// Авто-обновление данных (чтобы пользователю не жать F5)
+// =========================================================
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(pollTick, 15000); // каждые 15 секунд
+}
+
+async function pollTick() {
+  if (document.hidden) return; // вкладка не на экране — не дёргаем сервер
+  const ae = document.activeElement; // не мешаем, пока пользователь печатает
+  if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+  if (!getToken()) { stopPolling(); return; }
+
+  // Проверяем сессию; заодно ловим её истечение и обновляем класс ученика.
+  let prof;
+  try { prof = await api.profile(); }
+  catch { stopPolling(); clearAuth(); showSection(null); return; }
+
+  try {
+    if (prof.role === "student") {
+      studentClass = prof.class || "";
+      await Promise.all([loadStuHomeworks(), loadStuGrades(), loadStuSchedule()]);
+    } else if (prof.role === "teacher") {
+      await Promise.all([loadTeaHomeworks(), loadTeaRequests()]);
+      // "Работы учеников" обновляем, только если вкладка открыта и оценка не начата —
+      // иначе затрём набранное в поле ввода.
+      const subsActive = document.getElementById("tea-submissions").classList.contains("active");
+      if (subsActive && subsCurrentHw) {
+        const dirty = [...document.querySelectorAll("#subs-list .grade-input")].some(i => i.value.trim() !== "");
+        if (!dirty) await loadSubmissions(subsCurrentHw);
+      }
+    } else if (prof.role === "admin") {
+      await Promise.all([loadAdmRequests(), loadUsers()]);
+    }
+  } catch (_) { /* разовую ошибку сети при фоновом обновлении игнорируем */ }
+}
+
 async function bootstrap() {
-  if (!getToken()) { showSection(null); return; }
+  if (!getToken()) { stopPolling(); showSection(null); return; }
   try {
     const prof = await api.profile();
     const role = prof.role;
@@ -591,7 +764,10 @@ async function bootstrap() {
     if      (role === "student") await loadStudentData(prof);
     else if (role === "teacher") await loadTeacherData();
     else if (role === "admin")   await loadAdminData();
+
+    startPolling(); // включаем авто-обновление
   } catch (_) {
+    stopPolling();
     clearAuth();
     showSection(null);
   }

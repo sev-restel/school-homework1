@@ -112,6 +112,7 @@
           <button class="role-tab active" data-panel="stu-homeworks">Задания</button>
           <button class="role-tab" data-panel="stu-submit">Сдать работу</button>
           <button class="role-tab" data-panel="stu-grades">Мои оценки</button>
+          <button class="role-tab" data-panel="stu-schedule">Расписание</button>
           <button class="role-tab" data-panel="stu-request">Записаться в класс</button>
         </nav>
 
@@ -147,6 +148,32 @@
           </div>
         </div>
 
+        <div id="stu-schedule" class="panel">
+          <div class="card">
+            <div class="card__head">
+              <h2>Расписание</h2>
+              <p class="card__sub" id="stu-sched-class"></p>
+            </div>
+            <div class="filter-row">
+              <label>Неделя
+                <select id="stu-sched-week">
+                  <option value="odd">Нечётная</option>
+                  <option value="even">Чётная</option>
+                </select>
+              </label>
+              <button id="stu-sched-load" class="btn-primary">Показать</button>
+            </div>
+            <div class="table-wrap">
+              <table class="sched-table">
+                <thead>
+                  <tr><th>День</th><th>Урок</th><th>Предмет</th><th>Кабинет</th></tr>
+                </thead>
+                <tbody id="stu-sched-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div id="stu-request" class="panel">
           <div class="card">
             <div class="card__head"><h2>Заявка на вступление в класс</h2></div>
@@ -165,6 +192,7 @@
           <button class="role-tab active" data-panel="tea-upload">Задать ДЗ</button>
           <button class="role-tab" data-panel="tea-homeworks">Мои задания</button>
           <button class="role-tab" data-panel="tea-submissions">Работы учеников</button>
+          <button class="role-tab" data-panel="tea-schedule">Моё расписание</button>
           <button class="role-tab" data-panel="tea-requests">Заявки</button>
         </nav>
 
@@ -174,6 +202,7 @@
             <form id="upload-form" enctype="multipart/form-data">
               <label>Файл <input name="file" type="file" required></label>
               <div class="form-row">
+                <label>Класс <span class="hint">кто увидит задание</span><input name="class" placeholder="5А" required></label>
                 <label>Предмет <input name="subject" placeholder="Математика"></label>
                 <label>Описание <input name="description" placeholder="§5 задачи 1–10"></label>
               </div>
@@ -204,6 +233,32 @@
           </div>
         </div>
 
+        <div id="tea-schedule" class="panel">
+          <div class="card">
+            <div class="card__head">
+              <h2>Моё расписание</h2>
+              <p class="card__sub">Уроки, которые ведёте вы, по выбранной неделе.</p>
+            </div>
+            <div class="filter-row">
+              <label>Неделя
+                <select id="tea-sched-week">
+                  <option value="odd">Нечётная</option>
+                  <option value="even">Чётная</option>
+                </select>
+              </label>
+              <button id="tea-sched-load" class="btn-primary">Показать</button>
+            </div>
+            <div class="table-wrap">
+              <table class="sched-table">
+                <thead>
+                  <tr><th>День</th><th>Урок</th><th>Класс</th><th>Предмет</th><th>Кабинет</th></tr>
+                </thead>
+                <tbody id="tea-sched-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div id="tea-requests" class="panel">
           <div class="card">
             <div class="card__head"><h2>Заявки в класс</h2></div>
@@ -217,6 +272,7 @@
         <nav class="role-tabs">
           <button class="role-tab active" data-panel="adm-schedule">Расписание</button>
           <button class="role-tab" data-panel="adm-requests">Заявки</button>
+          <button class="role-tab" data-panel="adm-users">Пользователи</button>
         </nav>
 
         <div id="adm-schedule" class="panel active">
@@ -274,6 +330,16 @@
           <div class="card">
             <div class="card__head"><h2>Заявки в класс</h2></div>
             <ul id="adm-req-list" class="item-list"></ul>
+          </div>
+        </div>
+
+        <div id="adm-users" class="panel">
+          <div class="card">
+            <div class="card__head">
+              <h2>Пользователи</h2>
+              <p class="card__sub">Исключение из класса и удаление учётных записей.</p>
+            </div>
+            <ul id="adm-users-list" class="item-list"></ul>
           </div>
         </div>
       </section>

@@ -22,6 +22,13 @@ func uniqueDiskName(orig string) string {
 	return name + "_" + hex.EncodeToString(b) + ext
 }
 
+// normClass приводит название класса к каноничному виду:
+// убирает пробелы по краям и переводит в верхний регистр,
+// чтобы "10б", "10Б", " 10Б " считались одним классом.
+func normClass(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
+}
+
 // uploadURLPath — путь, который мы храним в БД и отдаём фронту.
 // Всегда через прямой слэш ("uploads/xxx"), чтобы ссылка работала как URL
 // и на Windows (где filepath.Join поставил бы бэкслеш).

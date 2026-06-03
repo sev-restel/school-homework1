@@ -58,10 +58,12 @@ func RegistrHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	login := genarateUsername(fullName)
-	//Защита для роли учителя
-	teacherCode := os.Getenv("TEACHER_INVITE_CODE")
-	adminCode := os.Getenv("ADMIN_INVITE_CODE")
-	inviteCode := r.FormValue("invite_code")
+	//Защита для роли учителя.
+	//TrimSpace — на случай, если в переменной окружения или в поле формы
+	//затесались пробелы / перевод строки / кавычки от шелла.
+	teacherCode := strings.TrimSpace(os.Getenv("TEACHER_INVITE_CODE"))
+	adminCode := strings.TrimSpace(os.Getenv("ADMIN_INVITE_CODE"))
+	inviteCode := strings.TrimSpace(r.FormValue("invite_code"))
 
 	switch {
 	case adminCode != "" && inviteCode == adminCode:

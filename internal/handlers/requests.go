@@ -48,6 +48,7 @@ func CreateRequestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
+	input.ClassName = normClass(input.ClassName)
 	if input.ClassName == "" {
 		http.Error(w, "class_name обязателен", http.StatusBadRequest)
 		return

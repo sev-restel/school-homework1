@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 
@@ -27,6 +28,14 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		_ = godotenv.Load("password.env")
 	}
+
+	// Диагностика: видит ли процесс invite-коды и DSN (значения НЕ печатаем).
+	// strings.TrimSpace — чтобы пробелы не выглядели как "код задан".
+	log.Printf("ENV check → DATABASE_URL:%t  TEACHER_INVITE_CODE:%t (len=%d)  ADMIN_INVITE_CODE:%t (len=%d)",
+		strings.TrimSpace(os.Getenv("DATABASE_URL")) != "",
+		strings.TrimSpace(os.Getenv("TEACHER_INVITE_CODE")) != "", len(strings.TrimSpace(os.Getenv("TEACHER_INVITE_CODE"))),
+		strings.TrimSpace(os.Getenv("ADMIN_INVITE_CODE")) != "", len(strings.TrimSpace(os.Getenv("ADMIN_INVITE_CODE"))),
+	)
 
 	database.Init()
 
@@ -64,6 +73,12 @@ func main() {
 	http.HandleFunc("GET /api/grades", handlers.GetGradesHandler)
 	http.HandleFunc("GET /api/grades/{student_id}", handlers.GetStudentGradesHandler)
 	http.HandleFunc("GET /api/teachers", handlers.ListTeachersHandler)
+
+	// Управление пользователями (только admin)
+	http.HandleFunc("GET /api/users", handlers.ListUsersHandler)
+	http.HandleFunc("PATCH /api/users/{id}/kick", handlers.KickFromClassHandler)
+	http.HandleFunc("PATCH /api/users/{id}/password", handlers.ResetPasswordHandler)
+	http.HandleFunc("DELETE /api/users/{id}", handlers.DeleteUserHandler)
 	port := os.Getenv("PORT")
 	
 	if port == "" {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -61,14 +62,9 @@ func GetScheduleHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Разрешен только GET", http.StatusMethodNotAllowed)
 		return
 	}
-	_, err := getUserFromToken(r)
+	user, err := getUserFromToken(r)
 	if err != nil {
 		http.Error(w, "User не найден", http.StatusUnauthorized)
-		return
-	}
-	className := r.URL.Query().Get("class")
-	if className == "" {
-		http.Error(w, "Класс пуст", http.StatusBadRequest)
 		return
 	}
 	week := r.URL.Query().Get("week")
@@ -77,12 +73,30 @@ func GetScheduleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := database.DB.Query(`
-		SELECT id, class_name, week_parity, day_of_week, lesson_num, subject, teacher_id, room
-		FROM schedule
-		WHERE class_name = $1 AND week_parity = $2
-		ORDER BY day_of_week, lesson_num
-	`, className, week)
+	// mine=1 → расписание самого учителя (его уроки во всех классах).
+	// иначе → расписание конкретного класса (?class=...).
+	mine := r.URL.Query().Get("mine") == "1"
+	var rows *sql.Rows
+	if mine {
+		rows, err = database.DB.Query(`
+			SELECT id, class_name, week_parity, day_of_week, lesson_num, subject, teacher_id, room
+			FROM schedule
+			WHERE teacher_id = $1 AND week_parity = $2
+			ORDER BY day_of_week, lesson_num
+		`, user.ID, week)
+	} else {
+		className := normClass(r.URL.Query().Get("class"))
+		if className == "" {
+			http.Error(w, "Класс пуст", http.StatusBadRequest)
+			return
+		}
+		rows, err = database.DB.Query(`
+			SELECT id, class_name, week_parity, day_of_week, lesson_num, subject, teacher_id, room
+			FROM schedule
+			WHERE class_name = $1 AND week_parity = $2
+			ORDER BY day_of_week, lesson_num
+		`, className, week)
+	}
 	if err != nil {
 		http.Error(w, "Ошибка запроса к базе данных", http.StatusInternalServerError)
 		return
@@ -123,6 +137,7 @@ func CreateScheduleHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Был передан невалидный JSON", http.StatusBadRequest)
 		return
 	}
+	input.ClassName = normClass(input.ClassName)
 	err = validateScheduleInput(input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -156,6 +171,7 @@ func UpdateScheduleHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Был передан невалидный JSON", http.StatusBadRequest)
 		return
 	}
+	input.ClassName = normClass(input.ClassName)
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {

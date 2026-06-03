@@ -49,17 +49,21 @@ R=$(req POST /api/login -F username="$S_U" -F password="wrong"); split "$R"; che
 AH() { echo "-HAuthorization: Bearer $1"; }
 
 echo "=== 3. Учитель создаёт ДЗ ==="
-R=$(req POST /api/homeworks -H "Authorization: Bearer $T1_TOK" -F file=@"$TMP/hw.txt" -F subject="Math" -F description="par5"); split "$R"
-check "teacher1 upload homework" 200 "$CODE"
-R=$(req POST /api/homeworks -H "Authorization: Bearer $T2_TOK" -F file=@"$TMP/hw.txt" -F subject="History" -F description="report"); split "$R"
-check "teacher2 upload homework" 200 "$CODE"
-R=$(req POST /api/homeworks -H "Authorization: Bearer $S_TOK" -F file=@"$TMP/hw.txt"); split "$R"
+R=$(req POST /api/homeworks -H "Authorization: Bearer $T1_TOK" -F file=@"$TMP/hw.txt" -F class="5A" -F subject="Math" -F description="par5"); split "$R"
+check "teacher1 upload ДЗ для класса 5A" 200 "$CODE"
+R=$(req POST /api/homeworks -H "Authorization: Bearer $T2_TOK" -F file=@"$TMP/hw.txt" -F class="5A" -F subject="History" -F description="report"); split "$R"
+check "teacher2 upload ДЗ для класса 5A" 200 "$CODE"
+R=$(req POST /api/homeworks -H "Authorization: Bearer $T1_TOK" -F file=@"$TMP/hw.txt" -F class="6B" -F subject="Math"); split "$R"
+check "teacher1 upload ДЗ для класса 6B" 200 "$CODE"
+R=$(req POST /api/homeworks -H "Authorization: Bearer $T1_TOK" -F file=@"$TMP/hw.txt" -F subject="Math"); split "$R"
+check "upload без класса отклонён" 400 "$CODE"
+R=$(req POST /api/homeworks -H "Authorization: Bearer $S_TOK" -F file=@"$TMP/hw.txt" -F class="5A"); split "$R"
 check "student upload homework запрещён" 403 "$CODE"
 
 echo "=== 4. Видимость ДЗ по ролям ==="
 R=$(req GET /api/homeworks -H "Authorization: Bearer $T1_TOK"); split "$R"
-N=$(jget "$BODY" "len(d)"); check "teacher1 видит только свои (1 шт)" 1 "$N"
-HW_ID=$(jget "$BODY" "d[0]['id']")
+N=$(jget "$BODY" "len(d)"); check "teacher1 видит только свои (2 шт: 5A+6B)" 2 "$N"
+HW_ID=$(jget "$BODY" "[x['id'] for x in d if x['class_name']=='5A'][0]")
 R=$(req GET /api/homeworks -H "Authorization: Bearer $S_TOK"); split "$R"
 N=$(jget "$BODY" "len(d)"); check "студент БЕЗ класса не видит ДЗ (0 шт)" 0 "$N"
 
@@ -73,7 +77,9 @@ check "teacher принимает заявку" 200 "$CODE"
 R=$(req GET /api/profile -H "Authorization: Bearer $S_TOK"); split "$R"
 CLS=$(jget "$BODY" "d['class']"); check "у студента появился класс 5A" "5A" "$CLS"
 R=$(req GET /api/homeworks -H "Authorization: Bearer $S_TOK"); split "$R"
-N=$(jget "$BODY" "len(d)"); check "студент С классом видит ДЗ (2 шт)" 2 "$N"
+N=$(jget "$BODY" "len(d)"); check "студент 5A видит ДЗ своего класса (2 шт)" 2 "$N"
+HAS6B=$(jget "$BODY" "any(x['class_name']=='6B' for x in d)")
+check "студент 5A НЕ видит ДЗ класса 6B" "False" "$HAS6B"
 
 echo "=== 6. Сдача и оценка ==="
 R=$(req POST /api/submissions -H "Authorization: Bearer $S_TOK" -F homework_id="$HW_ID" -F file=@"$TMP/answer.txt"); split "$R"
@@ -98,13 +104,71 @@ echo "=== 8. Расписание ==="
 R=$(req POST /api/schedule -H "Authorization: Bearer $ADMIN_TOK" -H "Content-Type: application/json" -d "{\"class_name\":\"5A\",\"week_parity\":\"odd\",\"day_of_week\":1,\"lesson_num\":1,\"subject\":\"Math\",\"teacher_id\":1,\"room\":\"201\"}"); split "$R"
 check "admin создаёт расписание" 201 "$CODE"; SCH_ID=$(jget "$BODY" "d['id']")
 R=$(req GET "/api/schedule?class=5A&week=odd" -H "Authorization: Bearer $ADMIN_TOK"); split "$R"
-check "GET расписание" 200 "$CODE"
+check "GET расписание (admin)" 200 "$CODE"
+R=$(req GET "/api/schedule?class=5A&week=odd" -H "Authorization: Bearer $S_TOK"); split "$R"
+check "ученик видит расписание своего класса" 200 "$CODE"
 R=$(req PATCH /api/schedule/$SCH_ID -H "Authorization: Bearer $S_TOK" -H "Content-Type: application/json" -d '{"room":"999"}'); split "$R"
 check "БАГ-ФИКС: студент НЕ может править расписание" 403 "$CODE"
 R=$(req DELETE /api/schedule/$SCH_ID -H "Authorization: Bearer $ADMIN_TOK"); split "$R"
 check "admin удаляет расписание" 200 "$CODE"
 
-echo "=== 9. Logout ==="
+echo "=== 9. Нормализация класса и админ-функции ==="
+# Нормализация: ДЗ с классом '5a' (нижний регистр) ученик 5A должен увидеть
+R=$(req POST /api/homeworks -H "Authorization: Bearer $T1_TOK" -F file=@"$TMP/hw.txt" -F class="5a" -F subject="Biology"); split "$R"
+check "upload ДЗ с классом '5a' (нижний регистр)" 200 "$CODE"
+R=$(req GET /api/homeworks -H "Authorization: Bearer $S_TOK"); split "$R"
+N=$(jget "$BODY" "len(d)"); check "ученик 5A видит и '5a' (нормализация, 3 шт)" 3 "$N"
+
+# Список пользователей (admin) + достаём id
+R=$(req GET /api/users -H "Authorization: Bearer $ADMIN_TOK"); split "$R"
+check "admin видит список пользователей" 200 "$CODE"
+S_ID=$(jget "$BODY" "[x['id'] for x in d if x['username']=='$S_U'][0]")
+T1_ID=$(jget "$BODY" "[x['id'] for x in d if x['username']=='$T1_U'][0]")
+T2_ID=$(jget "$BODY" "[x['id'] for x in d if x['username']=='$T2_U'][0]")
+ADMIN_ID=$(jget "$BODY" "[x['id'] for x in d if x['username']=='$ADMIN_U'][0]")
+
+# Не-админ не может кикать/удалять
+R=$(req PATCH /api/users/$S_ID/kick -H "Authorization: Bearer $T1_TOK"); split "$R"
+check "учитель НЕ может исключать из класса" 403 "$CODE"
+R=$(req DELETE /api/users/$S_ID -H "Authorization: Bearer $T1_TOK"); split "$R"
+check "учитель НЕ может удалять аккаунты" 403 "$CODE"
+
+# Admin сбрасывает пароль ученику (восстановление доступа)
+R=$(req PATCH /api/users/$S_ID/password -H "Authorization: Bearer $ADMIN_TOK" -H "Content-Type: application/json" -d '{"password":"x12"}'); split "$R"
+check "короткий пароль при сбросе отклонён" 400 "$CODE"
+R=$(req PATCH /api/users/$S_ID/password -H "Authorization: Bearer $ADMIN_TOK" -H "Content-Type: application/json" -d '{"password":"newpass123"}'); split "$R"
+check "admin сбрасывает пароль ученику" 200 "$CODE"
+R=$(req POST /api/login -F username="$S_U" -F password="newpass123"); split "$R"
+check "вход с новым паролем работает" 200 "$CODE"
+R=$(req POST /api/login -F username="$S_U" -F password="stud123"); split "$R"
+check "старый пароль больше не работает" 401 "$CODE"
+R=$(req PATCH /api/users/$S_ID/password -H "Authorization: Bearer $T1_TOK" -H "Content-Type: application/json" -d '{"password":"hack123"}'); split "$R"
+check "учитель НЕ может менять пароли" 403 "$CODE"
+
+# Расписание учителя (mine) + нормализация класса в расписании
+R=$(req POST /api/schedule -H "Authorization: Bearer $ADMIN_TOK" -H "Content-Type: application/json" -d "{\"class_name\":\"5a\",\"week_parity\":\"odd\",\"day_of_week\":2,\"lesson_num\":3,\"subject\":\"Math\",\"teacher_id\":$T1_ID,\"room\":\"110\"}"); split "$R"
+check "admin создаёт урок для учителя 1" 201 "$CODE"
+R=$(req GET "/api/schedule?mine=1&week=odd" -H "Authorization: Bearer $T1_TOK"); split "$R"
+N=$(jget "$BODY" "len(d)"); check "учитель видит СВОЁ расписание (1 урок)" 1 "$N"
+CLS2=$(jget "$BODY" "d[0]['class_name']"); check "класс в расписании нормализован (5A)" "5A" "$CLS2"
+
+# Admin кикает ученика из класса
+R=$(req PATCH /api/users/$S_ID/kick -H "Authorization: Bearer $ADMIN_TOK"); split "$R"
+check "admin исключает ученика из класса" 200 "$CODE"
+R=$(req GET /api/homeworks -H "Authorization: Bearer $S_TOK"); split "$R"
+N=$(jget "$BODY" "len(d)"); check "после кика ученик не видит ДЗ (0 шт)" 0 "$N"
+
+# Admin не может удалить себя
+R=$(req DELETE /api/users/$ADMIN_ID -H "Authorization: Bearer $ADMIN_TOK"); split "$R"
+check "admin НЕ может удалить сам себя" 400 "$CODE"
+
+# Admin удаляет учётную запись учителя 2
+R=$(req DELETE /api/users/$T2_ID -H "Authorization: Bearer $ADMIN_TOK"); split "$R"
+check "admin удаляет аккаунт учителя 2" 200 "$CODE"
+R=$(req POST /api/login -F username="$T2_U" -F password="teach123"); split "$R"
+check "удалённый учитель не может войти" 404 "$CODE"
+
+echo "=== 10. Logout ==="
 R=$(req POST /api/logout -H "Authorization: Bearer $S_TOK"); split "$R"; check "logout" 200 "$CODE"
 R=$(req GET /api/homeworks -H "Authorization: Bearer $S_TOK"); split "$R"; check "после logout токен недействителен" 401 "$CODE"
 
