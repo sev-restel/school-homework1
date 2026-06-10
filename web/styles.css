@@ -330,7 +330,9 @@ input:focus, select:focus {
 }
 input[type="file"] { padding: 8px 12px; cursor: pointer; }
 
-.form-row { display: flex; gap: 14px; flex-wrap: wrap; }
+/* align-items: flex-end — чтобы поля ввода стояли на одном уровне, даже если
+   у какого-то label есть подсказка во вторую строку (например, «Класс»). */
+.form-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
 .form-row label { flex: 1; min-width: 150px; }
 
 .filter-row {
@@ -438,6 +440,16 @@ input[type="file"] { padding: 8px 12px; cursor: pointer; }
 }
 .item-title { font-weight: 700; font-size: .98rem; }
 .item-meta { color: var(--text-mut); font-size: .84rem; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.item-desc {
+  font-size: .9rem;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+  line-height: 1.4;
+}
+.item-desc__label { font-weight: 600; color: var(--brand-700); margin-right: 4px; }
 .item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* =========================================================
@@ -501,6 +513,74 @@ input[type="file"] { padding: 8px 12px; cursor: pointer; }
 }
 .sched-table tbody tr:last-child td { border-bottom: none; }
 .sched-table tbody tr:hover { background: var(--brand-50); }
+
+/* =========================================================
+   Сетка-редактор расписания (админ)
+   ========================================================= */
+.sched-grid-wrap { margin-top: 4px; }
+.sched-grid-title { font-weight: 700; font-size: 1rem; margin: 6px 0 12px; color: var(--text); }
+.sched-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 720px;
+}
+.sched-grid th, .sched-grid td { border: 1px solid var(--border); }
+.sched-grid thead th {
+  background: var(--surface-2);
+  padding: 9px 6px;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-soft);
+}
+.sched-grid__num {
+  width: 52px;
+  text-align: center;
+  background: var(--surface-2);
+  font-weight: 700;
+  color: var(--text-soft);
+}
+.sched-cell {
+  height: 66px;
+  vertical-align: top;
+  padding: 7px 9px;
+  position: relative;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.sched-cell--empty { text-align: center; color: var(--text-mut); vertical-align: middle; }
+.sched-cell--empty:hover { background: var(--brand-50); }
+.sched-cell__add { font-size: 1.25rem; color: var(--brand-400); font-weight: 700; }
+.sched-cell--empty:hover .sched-cell__add { color: var(--brand-600); }
+.sched-cell--filled { background: var(--surface); }
+.sched-cell--filled:hover { background: var(--brand-50); }
+.sched-cell__subj { font-weight: 600; font-size: .85rem; color: var(--text); padding-right: 16px; line-height: 1.25; }
+.sched-cell__meta { font-size: .73rem; color: var(--text-mut); margin-top: 3px; line-height: 1.2; }
+.sched-cell__del {
+  position: absolute; top: 3px; right: 4px;
+  width: 19px; height: 19px;
+  border: none; background: transparent;
+  color: var(--text-mut); font-size: 1.05rem; line-height: 1;
+  cursor: pointer; border-radius: 5px;
+}
+.sched-cell__del:hover { background: var(--danger-bg); color: var(--danger); }
+
+/* Ячейки «только просмотр» (ученик / учитель) — без кликов и подсветки */
+.sched-cell--ro { cursor: default; }
+.sched-cell--ro.sched-cell--empty:hover,
+.sched-cell--ro.sched-cell--filled:hover { background: transparent; }
+.sched-cell--ro.sched-cell--filled:hover { background: var(--surface); }
+
+.sched-editor {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--brand-200);
+  background: var(--brand-50);
+  border-radius: var(--r-md);
+}
+.sched-editor__head { font-weight: 700; margin-bottom: 14px; color: var(--brand-700); }
+.sched-editor__actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
 
 /* =========================================================
    Toast

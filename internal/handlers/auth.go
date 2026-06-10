@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/K1viyt/school-homework/internal/database"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -57,7 +59,7 @@ func RegistrHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Пароль должен быть не короче 6 символов", http.StatusBadRequest)
 		return
 	}
-	login := genarateUsername(fullName)
+	var login string
 	//Защита для роли учителя.
 	//TrimSpace — на случай, если в переменной окружения или в поле формы
 	//затесались пробелы / перевод строки / кавычки от шелла.
@@ -90,12 +92,29 @@ func RegistrHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка записи pasword в hash", http.StatusBadRequest)
 		return
 	}
-	//Записываем данные в БД
+	//Записываем данные в БД.
+	// Логин генерится как «имя_XXXX»; при совпадении (UNIQUE username, код 23505)
+	// пробуем другой логин. Так регистрируется сколько угодно пользователей
+	// с одинаковыми именами (в т.ч. несколько админов) — без «невалидных» учёток.
 	// string(hash): bcrypt отдаёт []byte, а pgx биндит []byte как bytea —
 	// вставка в text-колонку password падает. Приводим к строке.
-	_, err = database.DB.Exec(`INSERT INTO users(full_name,role,password,username,class,subject) VALUES($1,$2,$3,$4,$5,$6)`, fullName, role, string(hash), login, className, subjectName)
-	if err != nil {
-		http.Error(w, "Ошибка загрузки данных пользователя в базу", http.StatusBadRequest)
+	inserted := false
+	for attempt := 0; attempt < 8; attempt++ {
+		login = genarateUsername(fullName)
+		_, err = database.DB.Exec(`INSERT INTO users(full_name,role,password,username,class,subject) VALUES($1,$2,$3,$4,$5,$6)`, fullName, role, string(hash), login, className, subjectName)
+		if err == nil {
+			inserted = true
+			break
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			continue // логин занят — пробуем другой
+		}
+		http.Error(w, "Ошибка загрузки данных пользователя в базу", http.StatusInternalServerError)
+		return
+	}
+	if !inserted {
+		http.Error(w, "Не удалось подобрать свободный логин, попробуйте ещё раз", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

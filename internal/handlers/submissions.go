@@ -17,6 +17,7 @@ import (
 type Submission struct {
 	ID          int    `json:"id"`
 	StudentID   int    `json:"student_id"`
+	FullName    string `json:"full_name"`
 	Filepath    string `json:"filepath"`
 	Grade       *int   `json:"grade"`
 	Status      string `json:"status"`
@@ -106,18 +107,23 @@ func GetSubmissionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := database.DB.Query(`SELECT id, student_id, filepath, grade, status, submitted_at FROM submissions WHERE homework_id = $1`, homework_id)
+	rows, err := database.DB.Query(`
+		SELECT s.id, s.student_id, u.full_name, s.filepath, s.grade, s.status, s.submitted_at
+		FROM submissions s
+		JOIN users u ON s.student_id = u.id
+		WHERE s.homework_id = $1
+		ORDER BY s.submitted_at DESC`, homework_id)
 	if err != nil {
 		http.Error(w, "Ошибка запроса к базе данных", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var submissions []Submission
+	submissions := []Submission{}
 
 	for rows.Next() {
 		var sb Submission
-		err := rows.Scan(&sb.ID, &sb.StudentID, &sb.Filepath, &sb.Grade, &sb.Status, &sb.SubmittedAt)
+		err := rows.Scan(&sb.ID, &sb.StudentID, &sb.FullName, &sb.Filepath, &sb.Grade, &sb.Status, &sb.SubmittedAt)
 		if err != nil {
 			http.Error(w, "Некоректный тип данных", http.StatusBadRequest)
 			return

@@ -30,6 +30,8 @@ split() { CODE=$(printf '%s' "$1" | tail -n1); BODY=$(printf '%s' "$1" | sed '$d
 echo "=== 1. Регистрация ==="
 R=$(req POST /api/register -F full_name="Admin Glavny" -F password="admin123" -F invite_code="SECRET_ADMIN_456"); split "$R"
 check "register admin" 200 "$CODE"; ADMIN_U=$(jget "$BODY" "d['username']")
+R=$(req POST /api/register -F full_name="Admin Second" -F password="admin123" -F invite_code="SECRET_ADMIN_456"); split "$R"
+check "register admin2 (несколько админов, логины не конфликтуют)" 200 "$CODE"; ADMIN2_U=$(jget "$BODY" "d['username']")
 R=$(req POST /api/register -F full_name="Teacher One" -F password="teach123" -F subject="Math" -F invite_code="SECRET_TEACHER_123"); split "$R"
 check "register teacher1" 200 "$CODE"; T1_U=$(jget "$BODY" "d['username']")
 R=$(req POST /api/register -F full_name="Teacher Two" -F password="teach123" -F subject="History" -F invite_code="SECRET_TEACHER_123"); split "$R"
@@ -41,6 +43,9 @@ check "register: короткий пароль отклонён" 400 "$CODE"
 
 echo "=== 2. Логин ==="
 R=$(req POST /api/login -F username="$ADMIN_U" -F password="admin123"); split "$R"; check "login admin" 200 "$CODE"; ADMIN_TOK=$(jget "$BODY" "d['token']")
+R=$(req POST /api/login -F username="$ADMIN2_U" -F password="admin123"); split "$R"; check "login admin2" 200 "$CODE"; ADMIN2_TOK=$(jget "$BODY" "d['token']")
+R=$(req GET /api/users -H "Authorization: Bearer $ADMIN2_TOK"); split "$R"; check "второй админ ВАЛИДЕН (доступ к админ-API)" 200 "$CODE"
+[ "$ADMIN_U" != "$ADMIN2_U" ] && check "логины двух админов различны" "ok" "ok" || check "логины двух админов различны" "ok" "СОВПАЛИ:$ADMIN_U"
 R=$(req POST /api/login -F username="$T1_U" -F password="teach123"); split "$R"; check "login teacher1" 200 "$CODE"; T1_TOK=$(jget "$BODY" "d['token']")
 R=$(req POST /api/login -F username="$T2_U" -F password="teach123"); split "$R"; check "login teacher2" 200 "$CODE"; T2_TOK=$(jget "$BODY" "d['token']")
 R=$(req POST /api/login -F username="$S_U" -F password="stud123"); split "$R"; check "login student" 200 "$CODE"; S_TOK=$(jget "$BODY" "d['token']")
@@ -80,12 +85,15 @@ R=$(req GET /api/homeworks -H "Authorization: Bearer $S_TOK"); split "$R"
 N=$(jget "$BODY" "len(d)"); check "студент 5A видит ДЗ своего класса (2 шт)" 2 "$N"
 HAS6B=$(jget "$BODY" "any(x['class_name']=='6B' for x in d)")
 check "студент 5A НЕ видит ДЗ класса 6B" "False" "$HAS6B"
+DESC=$(jget "$BODY" "[x['description'] for x in d if x['subject']=='Math'][0]")
+check "ученик видит описание задания" "par5" "$DESC"
 
 echo "=== 6. Сдача и оценка ==="
 R=$(req POST /api/submissions -H "Authorization: Bearer $S_TOK" -F homework_id="$HW_ID" -F file=@"$TMP/answer.txt"); split "$R"
 check "student сдаёт работу" 201 "$CODE"
 R=$(req GET /api/submissions/$HW_ID -H "Authorization: Bearer $T1_TOK"); split "$R"
 check "teacher видит работы" 200 "$CODE"; SUB_ID=$(jget "$BODY" "d[0]['id']"); SUB_FP=$(jget "$BODY" "d[0]['filepath']")
+SUB_NAME=$(jget "$BODY" "d[0]['full_name']"); check "в работе видно имя ученика" "Student Vasilev" "$SUB_NAME"
 R=$(req GET /api/submissions/$HW_ID -H "Authorization: Bearer $T2_TOK"); split "$R"
 check "чужой учитель НЕ видит работы по чужому ДЗ" 403 "$CODE"
 R=$(req PATCH /api/submissions/$SUB_ID/grade -H "Authorization: Bearer $T2_TOK" -H "Content-Type: application/json" -d '{"grade":4}'); split "$R"

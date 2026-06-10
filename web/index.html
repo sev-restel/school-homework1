@@ -163,14 +163,7 @@
               </label>
               <button id="stu-sched-load" class="btn-primary">Показать</button>
             </div>
-            <div class="table-wrap">
-              <table class="sched-table">
-                <thead>
-                  <tr><th>День</th><th>Урок</th><th>Предмет</th><th>Кабинет</th></tr>
-                </thead>
-                <tbody id="stu-sched-tbody"></tbody>
-              </table>
-            </div>
+            <div id="stu-sched-grid" class="sched-grid-wrap"></div>
           </div>
         </div>
 
@@ -248,14 +241,7 @@
               </label>
               <button id="tea-sched-load" class="btn-primary">Показать</button>
             </div>
-            <div class="table-wrap">
-              <table class="sched-table">
-                <thead>
-                  <tr><th>День</th><th>Урок</th><th>Класс</th><th>Предмет</th><th>Кабинет</th></tr>
-                </thead>
-                <tbody id="tea-sched-tbody"></tbody>
-              </table>
-            </div>
+            <div id="tea-sched-grid" class="sched-grid-wrap"></div>
           </div>
         </div>
 
@@ -277,51 +263,42 @@
 
         <div id="adm-schedule" class="panel active">
           <div class="card">
-            <div class="card__head"><h2>Добавить запись в расписание</h2></div>
-            <form id="schedule-form">
-              <div class="form-row">
-                <label>Класс <input name="class_name" placeholder="5А" required></label>
-                <label>Неделя
-                  <select name="week_parity">
-                    <option value="odd">Нечётная</option>
-                    <option value="even">Чётная</option>
-                  </select>
-                </label>
-                <label>День (1–6) <input name="day_of_week" type="number" min="1" max="6" required></label>
-                <label>Урок (1–10) <input name="lesson_num" type="number" min="1" max="10" required></label>
-              </div>
-              <div class="form-row">
-                <label>Предмет <input name="subject" required></label>
-                <label>Учитель
-                  <select id="schedule-teacher-select" name="teacher_id">
-                    <option value="">— выберите учителя —</option>
-                  </select>
-                </label>
-                <label>Кабинет <input name="room" placeholder="201"></label>
-              </div>
-              <button type="submit" class="btn-primary">Добавить в расписание</button>
-            </form>
-          </div>
-
-          <div class="card">
-            <div class="card__head"><h2>Просмотр расписания</h2></div>
+            <div class="card__head">
+              <h2>Редактор расписания</h2>
+              <p class="card__sub">Выберите класс и неделю — заполняйте слоты по дням и номерам уроков. Можно вести расписание для нескольких классов.</p>
+            </div>
             <div class="filter-row">
-              <label>Класс <input id="sched-class-filter" placeholder="5А"></label>
+              <label>Класс
+                <input id="sched-class" list="sched-class-list" placeholder="5А" autocomplete="off">
+                <datalist id="sched-class-list"></datalist>
+              </label>
               <label>Неделя
-                <select id="sched-week-filter">
+                <select id="sched-week">
                   <option value="odd">Нечётная</option>
                   <option value="even">Чётная</option>
                 </select>
               </label>
-              <button id="sched-load-btn" class="btn-primary">Показать</button>
+              <button id="sched-open" class="btn-primary">Открыть</button>
             </div>
-            <div class="table-wrap">
-              <table class="sched-table">
-                <thead>
-                  <tr><th>День</th><th>Урок</th><th>Предмет</th><th>Кабинет</th><th></th></tr>
-                </thead>
-                <tbody id="schedule-tbody"></tbody>
-              </table>
+
+            <div id="sched-grid-wrap" class="sched-grid-wrap">
+              <p class="hint">Укажите класс и неделю, затем нажмите «Открыть».</p>
+            </div>
+
+            <div id="sched-editor" class="sched-editor" hidden>
+              <div class="sched-editor__head" id="sched-editor-title"></div>
+              <div class="form-row">
+                <label>Предмет <input id="se-subject" placeholder="Математика"></label>
+                <label>Учитель
+                  <select id="se-teacher"><option value="">— выберите учителя —</option></select>
+                </label>
+                <label>Кабинет <input id="se-room" placeholder="201"></label>
+              </div>
+              <div class="sched-editor__actions">
+                <button id="se-save" class="btn-primary">Сохранить</button>
+                <button id="se-delete" class="btn-small btn-danger" hidden>Удалить урок</button>
+                <button id="se-cancel" class="btn-small">Отмена</button>
+              </div>
             </div>
           </div>
         </div>

@@ -60,6 +60,7 @@ const api = {
   // Schedule
   getSchedule:    (cls, week) => request(`/api/schedule?class=${encodeURIComponent(cls)}&week=${week}`),
   createSchedule: (data)      => request("/api/schedule", { method: "POST", body: JSON.stringify(data), json: true }),
+  updateSchedule: (id, data)  => request("/api/schedule/" + id, { method: "PATCH", body: JSON.stringify(data), json: true }),
   deleteSchedule: (id)        => request("/api/schedule/" + id, { method: "DELETE" }),
 
   // Submissions (ученик сдаёт, учитель проверяет)
@@ -214,32 +215,52 @@ async function loadStudentData(prof) {
   $("#stu-sched-class").textContent = studentClass
     ? "Класс " + studentClass
     : "Вы пока не записаны в класс";
-  // Грузим задания, оценки и расписание параллельно
-  await Promise.all([loadStuHomeworks(), loadStuGrades(), loadStuSchedule()]);
+  // Грузим задания, оценки, учителей (для имён в расписании) и расписание
+  await Promise.all([loadStuHomeworks(), loadStuGrades(), loadTeachers()]);
+  await loadStuSchedule();
+}
+
+// Рендер расписания сеткой «уроки × дни» (только просмотр).
+// mode: 'student' → во второй строке учитель+кабинет; 'teacher' → класс+кабинет.
+function readonlyScheduleGridHTML(map, mode) {
+  let html = `<div class="table-wrap"><table class="sched-grid"><thead><tr><th>Урок</th>`;
+  for (let d = 1; d <= 6; d++) html += `<th>${DAYS_SHORT[d]}</th>`;
+  html += `</tr></thead><tbody>`;
+  for (let l = 1; l <= SCHED_LESSONS; l++) {
+    html += `<tr><th class="sched-grid__num">${l}</th>`;
+    for (let d = 1; d <= 6; d++) {
+      const les = map[`${d}_${l}`];
+      if (les) {
+        const room = les.room ? " · каб. " + h(les.room) : "";
+        const line2 = mode === "teacher"
+          ? "класс " + h(les.class_name) + room
+          : h(teacherNameById(les.teacher_id)) + room;
+        html += `<td class="sched-cell sched-cell--filled sched-cell--ro">
+          <div class="sched-cell__subj">${h(les.subject)}</div>
+          <div class="sched-cell__meta">${line2}</div></td>`;
+      } else {
+        html += `<td class="sched-cell sched-cell--empty sched-cell--ro"></td>`;
+      }
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table></div>`;
+  return html;
 }
 
 // Расписание ученика (по его классу)
 async function loadStuSchedule() {
-  const tbody = $("#stu-sched-tbody");
+  const wrap = $("#stu-sched-grid");
   if (!studentClass) {
-    tbody.innerHTML = "<tr><td colspan='4' class='hint'>Вступите в класс, чтобы увидеть расписание.</td></tr>";
+    wrap.innerHTML = `<p class="hint">Вступите в класс, чтобы увидеть расписание.</p>`;
     return;
   }
   const week = $("#stu-sched-week").value;
   try {
     const list = (await api.getSchedule(studentClass, week)) || [];
-    tbody.innerHTML = list.length === 0
-      ? "<tr><td colspan='4' class='hint'>На эту неделю записей нет.</td></tr>"
-      : "";
-    for (const s of list) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${h(DAYS[s.day_of_week] || s.day_of_week)}</td>
-        <td>${s.lesson_num}</td>
-        <td>${h(s.subject)}</td>
-        <td>${s.room ? h(s.room) : "—"}</td>`;
-      tbody.appendChild(tr);
-    }
+    const map = {};
+    for (const s of list) map[`${s.day_of_week}_${s.lesson_num}`] = s;
+    wrap.innerHTML = readonlyScheduleGridHTML(map, "student");
   } catch (err) { toast("Ошибка загрузки расписания: " + err.message, "error"); }
 }
 
@@ -263,10 +284,10 @@ async function loadStuHomeworks() {
       li.innerHTML = `
         <div class="item-title">${h(hw.filename)}</div>
         <div class="item-meta">${[
-          hw.class_name  ? "Класс: "    + h(hw.class_name)  : null,
-          hw.subject     ? "Предмет: "  + h(hw.subject)     : null,
-          hw.description ? "Описание: " + h(hw.description) : null,
+          hw.class_name ? "Класс: "   + h(hw.class_name) : null,
+          hw.subject    ? "Предмет: " + h(hw.subject)    : null,
         ].filter(Boolean).join(" · ") || "—"}</div>
+        ${hw.description ? `<div class="item-desc"><span class="item-desc__label">Задание:</span> ${h(hw.description)}</div>` : ""}
         <div class="item-actions">
           ${hw.filepath ? downloadLink(hw.filepath, "Скачать файл") : ""}
           <button class="btn-outline" data-hw-id="${hw.id}">Сдать работу</button>
@@ -348,25 +369,15 @@ async function loadTeacherData() {
   await Promise.all([loadTeaHomeworks(), loadTeaRequests(), loadTeaSchedule()]);
 }
 
-// Расписание самого учителя
+// Расписание самого учителя (сеткой, во второй строке — класс)
 async function loadTeaSchedule() {
-  const tbody = $("#tea-sched-tbody");
+  const wrap = $("#tea-sched-grid");
   const week = $("#tea-sched-week").value;
   try {
     const list = (await api.getMySchedule(week)) || [];
-    tbody.innerHTML = list.length === 0
-      ? "<tr><td colspan='5' class='hint'>На эту неделю уроков нет.</td></tr>"
-      : "";
-    for (const s of list) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${h(DAYS[s.day_of_week] || s.day_of_week)}</td>
-        <td>${s.lesson_num}</td>
-        <td>${h(s.class_name)}</td>
-        <td>${h(s.subject)}</td>
-        <td>${s.room ? h(s.room) : "—"}</td>`;
-      tbody.appendChild(tr);
-    }
+    const map = {};
+    for (const s of list) map[`${s.day_of_week}_${s.lesson_num}`] = s;
+    wrap.innerHTML = readonlyScheduleGridHTML(map, "teacher");
   } catch (err) { toast("Ошибка загрузки расписания: " + err.message, "error"); }
 }
 $("#tea-sched-load").addEventListener("click", loadTeaSchedule);
@@ -491,7 +502,7 @@ async function loadSubmissions(hwId) {
 
       li.innerHTML = `
         <div class="grade-row">
-          <span class="item-title">Студент #${sb.student_id}</span> ${gradeHtml}
+          <span class="item-title">${h(sb.full_name || ("Студент #" + sb.student_id))}</span> ${gradeHtml}
         </div>
         <div class="item-meta">
           ${downloadLink(sb.filepath, "Скачать работу")} <span>· ${new Date(sb.submitted_at).toLocaleDateString("ru-RU")}</span>
@@ -584,81 +595,152 @@ async function loadUsers() {
 
       ul.appendChild(li);
     }
+
+    // Заполняем список классов для меню в редакторе расписания
+    const dl = $("#sched-class-list");
+    if (dl) {
+      const classes = [...new Set(users.filter(u => u.class).map(u => u.class))].sort();
+      dl.innerHTML = classes.map(c => `<option value="${h(c)}">`).join("");
+    }
   } catch (err) { toast("Ошибка загрузки пользователей: " + err.message, "error"); }
 }
 
-// Заполняет выпадающий список учителей в форме расписания
+// =========================================================
+// Редактор расписания (админ): сетка «уроки × дни» + редактор слота
+// =========================================================
+const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const SCHED_LESSONS = 7; // максимум уроков в день
+let schedTeachers = [];  // кэш учителей для выпадающего списка
+let schedState = { cls: "", week: "odd", map: {} }; // map: `${day}_${lesson}` -> урок
+let schedEditing = null; // { day, lesson, id|null }
+
+// Загружаем учителей в кэш (используется в редакторе слота)
 async function loadTeachers() {
-  try {
-    const teachers = (await api.listTeachers()) || [];
-    const sel = $("#schedule-teacher-select");
-    sel.innerHTML = '<option value="">— выберите учителя —</option>';
-    for (const t of teachers) {
-      const opt = document.createElement("option");
-      opt.value       = t.id;
-      opt.textContent = t.full_name + (t.subject ? ` (${t.subject})` : "");
-      sel.appendChild(opt);
-    }
-  } catch (err) { toast("Ошибка загрузки учителей: " + err.message, "error"); }
+  try { schedTeachers = (await api.listTeachers()) || []; }
+  catch (err) { toast("Ошибка загрузки учителей: " + err.message, "error"); }
+}
+function teacherNameById(id) {
+  const t = schedTeachers.find(t => t.id === id);
+  return t ? t.full_name : ("учитель #" + id);
+}
+function teacherOptionsHtml(selectedId) {
+  let o = '<option value="">— выберите учителя —</option>';
+  for (const t of schedTeachers) {
+    o += `<option value="${t.id}" ${t.id === selectedId ? "selected" : ""}>${h(t.full_name)}${t.subject ? " (" + h(t.subject) + ")" : ""}</option>`;
+  }
+  return o;
 }
 
-// Форма создания записи расписания
-$("#schedule-form").addEventListener("submit", async e => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const teacherId = parseInt(fd.get("teacher_id"), 10);
-  if (!teacherId) { toast("Выберите учителя", "error"); return; }
+// Открыть расписание выбранного класса/недели
+async function openSchedule() {
+  const cls = ($("#sched-class").value || "").trim().toUpperCase();
+  if (!cls) { toast("Укажите класс", "error"); return; }
+  $("#sched-class").value = cls;
+  schedState.cls = cls;
+  schedState.week = $("#sched-week").value;
+  hideSchedEditor();
+  await reloadScheduleGrid();
+}
 
-  const room = fd.get("room").trim();
+async function reloadScheduleGrid() {
+  if (!schedState.cls) return;
+  try {
+    const list = (await api.getSchedule(schedState.cls, schedState.week)) || [];
+    schedState.map = {};
+    for (const s of list) schedState.map[`${s.day_of_week}_${s.lesson_num}`] = s;
+    renderScheduleGrid();
+  } catch (err) { toast("Ошибка загрузки расписания: " + err.message, "error"); }
+}
+
+function renderScheduleGrid() {
+  const wrap = $("#sched-grid-wrap");
+  const weekRu = schedState.week === "odd" ? "нечётная" : "чётная";
+  let html = `<div class="sched-grid-title">Класс ${h(schedState.cls)} · ${weekRu} неделя</div>`;
+  html += `<div class="table-wrap"><table class="sched-grid"><thead><tr><th>Урок</th>`;
+  for (let d = 1; d <= 6; d++) html += `<th>${DAYS_SHORT[d]}</th>`;
+  html += `</tr></thead><tbody>`;
+  for (let l = 1; l <= SCHED_LESSONS; l++) {
+    html += `<tr><th class="sched-grid__num">${l}</th>`;
+    for (let d = 1; d <= 6; d++) {
+      const les = schedState.map[`${d}_${l}`];
+      if (les) {
+        html += `<td class="sched-cell sched-cell--filled" data-day="${d}" data-lesson="${l}">
+          <button class="sched-cell__del" data-del="${les.id}" title="Удалить">×</button>
+          <div class="sched-cell__subj">${h(les.subject)}</div>
+          <div class="sched-cell__meta">${h(teacherNameById(les.teacher_id))}${les.room ? " · каб. " + h(les.room) : ""}</div>
+        </td>`;
+      } else {
+        html += `<td class="sched-cell sched-cell--empty" data-day="${d}" data-lesson="${l}"><span class="sched-cell__add">＋</span></td>`;
+      }
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table></div>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll(".sched-cell").forEach(cell => {
+    cell.addEventListener("click", e => {
+      if (e.target.closest("[data-del]")) return;
+      const day = +cell.dataset.day, lesson = +cell.dataset.lesson;
+      openSchedEditor(day, lesson, schedState.map[`${day}_${lesson}`] || null);
+    });
+  });
+  wrap.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      if (!confirm("Удалить этот урок?")) return;
+      try { await api.deleteSchedule(+btn.dataset.del); toast("Урок удалён"); hideSchedEditor(); await reloadScheduleGrid(); }
+      catch (err) { toast(err.message, "error"); }
+    });
+  });
+}
+
+function openSchedEditor(day, lesson, les) {
+  schedEditing = { day, lesson, id: les ? les.id : null };
+  const weekRu = schedState.week === "odd" ? "нечётная" : "чётная";
+  $("#sched-editor-title").textContent =
+    `${DAYS[day]}, урок ${lesson} · класс ${schedState.cls} · ${weekRu} неделя`;
+  $("#se-teacher").innerHTML = teacherOptionsHtml(les ? les.teacher_id : 0);
+  $("#se-subject").value = les ? les.subject : "";
+  $("#se-room").value = les && les.room ? les.room : "";
+  $("#se-delete").hidden = !les;
+  $("#sched-editor").hidden = false;
+  $("#se-subject").focus();
+}
+function hideSchedEditor() { $("#sched-editor").hidden = true; schedEditing = null; }
+
+$("#sched-open").addEventListener("click", openSchedule);
+$("#sched-week").addEventListener("change", () => { if (schedState.cls) openSchedule(); });
+$("#se-cancel").addEventListener("click", hideSchedEditor);
+$("#se-delete").addEventListener("click", async () => {
+  if (!schedEditing || !schedEditing.id) return;
+  if (!confirm("Удалить этот урок?")) return;
+  try { await api.deleteSchedule(schedEditing.id); toast("Урок удалён"); hideSchedEditor(); await reloadScheduleGrid(); }
+  catch (err) { toast(err.message, "error"); }
+});
+$("#se-save").addEventListener("click", async () => {
+  if (!schedEditing) return;
+  const subject = $("#se-subject").value.trim();
+  const teacherId = parseInt($("#se-teacher").value, 10);
+  const room = $("#se-room").value.trim();
+  if (!subject) { toast("Укажите предмет", "error"); return; }
+  if (!teacherId) { toast("Выберите учителя", "error"); return; }
   const data = {
-    class_name:  fd.get("class_name"),
-    week_parity: fd.get("week_parity"),
-    day_of_week: parseInt(fd.get("day_of_week"), 10),
-    lesson_num:  parseInt(fd.get("lesson_num"),  10),
-    subject:     fd.get("subject"),
+    class_name:  schedState.cls,
+    week_parity: schedState.week,
+    day_of_week: schedEditing.day,
+    lesson_num:  schedEditing.lesson,
+    subject,
     teacher_id:  teacherId,
-    room:        room || null, // пустая строка → null (иначе сервер вернёт ошибку)
+    room: room || null,
   };
   try {
-    await api.createSchedule(data);
-    toast("Запись добавлена в расписание!");
-    e.target.reset();
+    if (schedEditing.id) await api.updateSchedule(schedEditing.id, data);
+    else                 await api.createSchedule(data);
+    toast("Расписание сохранено");
+    hideSchedEditor();
+    await reloadScheduleGrid();
   } catch (err) { toast(err.message, "error"); }
-});
-
-// Просмотр расписания
-$("#sched-load-btn").addEventListener("click", async () => {
-  const cls  = $("#sched-class-filter").value.trim();
-  const week = $("#sched-week-filter").value;
-  if (!cls) { toast("Введите класс", "error"); return; }
-  try {
-    const list  = (await api.getSchedule(cls, week)) || [];
-    const tbody = $("#schedule-tbody");
-    tbody.innerHTML = "";
-
-    if (list.length === 0) {
-      tbody.innerHTML = "<tr><td colspan='5' class='hint'>Записей нет.</td></tr>";
-      return;
-    }
-    for (const s of list) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${h(DAYS[s.day_of_week] || s.day_of_week)}</td>
-        <td>${s.lesson_num}</td>
-        <td>${h(s.subject)}</td>
-        <td>${s.room ? h(s.room) : "—"}</td>
-        <td><button class="btn-small btn-danger" data-sid="${s.id}">Удалить</button></td>`;
-      tr.querySelector("[data-sid]").addEventListener("click", async () => {
-        if (!confirm("Удалить запись из расписания?")) return;
-        try {
-          await api.deleteSchedule(s.id);
-          toast("Запись удалена");
-          $("#sched-load-btn").click(); // перезагружаем таблицу
-        } catch (err) { toast(err.message, "error"); }
-      });
-      tbody.appendChild(tr);
-    }
-  } catch (err) { toast("Ошибка: " + err.message, "error"); }
 });
 
 async function loadAdmRequests() {
